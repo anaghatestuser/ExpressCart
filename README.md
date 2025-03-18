@@ -17,36 +17,26 @@ sh
 Copy
 Edit
 git clone <your-forked-repo-link>
-cd expressCart-opensource
+
+
 Step 3 - Install Dependencies
 Make sure Node.js and MongoDB are installed on your system. Then, run:
 
-sh
-Copy
-Edit
-npm install
+
+Run command- npm install
+
 Step 4 - Set Up Environment Variables
 Create a .env file in the project root and add the required environment variables, such as:
 
-env
-Copy
-Edit
-MONGO_URI=mongodb://localhost:27017/expressCart
-SESSION_SECRET=your_secret_key
-STRIPE_SECRET_KEY=your_stripe_key
-PAYPAL_CLIENT_ID=your_paypal_client_id
+
 Step 5 - Run the Application
 Start the application with:
 
-sh
-Copy
-Edit
-npm start
+Run - npm start
+
 For development mode with live-reloading, use:
 
-sh
-Copy
-Edit
-npm run dev
+Run - npm run dev
+
 License
 This project is licensed under the MIT License.
