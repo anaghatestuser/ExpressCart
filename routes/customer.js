@@ -48,7 +48,7 @@ router.post('/customer/create', async (req, res) => {
     }
 
     // check for existing customer
-    const customer = await db.customers.findOne({ email: req.body.email });
+    const customer = await db.customers.findOne({ email: mongoSanitize(req.body.email) });
     if(customer){
         res.status(400).json({
             message: 'A customer already exists with that email address'
@@ -508,7 +508,7 @@ router.post('/customer/forgotten_action', apiLimiter, async (req, res) => {
     const passwordToken = randtoken.generate(30);
 
     // find the user
-    const customer = await db.customers.findOne({ email: req.body.email });
+    const customer = await db.customers.findOne({ email: mongoSanitize(req.body.email) });
     try{
         if(!customer){
             // if don't have an email on file, silently fail
@@ -518,7 +518,7 @@ router.post('/customer/forgotten_action', apiLimiter, async (req, res) => {
             return;
         }
         const tokenExpiry = Date.now() + 3600000;
-        await db.customers.updateOne({ email: req.body.email }, { $set: { resetToken: passwordToken, resetTokenExpiry: tokenExpiry } }, { multi: false });
+        await db.customers.updateOne({ email: mongoSanitize(req.body.email) }, { $set: { resetToken: passwordToken, resetTokenExpiry: tokenExpiry } }, { multi: false });
         // send forgotten password email
         const mailOpts = {
             to: req.body.email,
