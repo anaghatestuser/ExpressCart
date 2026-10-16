@@ -34,7 +34,7 @@
     "bcryptjs": "^2.4.3",
     "cheerio": "0.22.0-lineaje-01",
     "colors": "^1.4.0",
-    "connect-mongodb-session": "^2.2.0",
+    "connect-mongodb-session": "2.4.1-lineaje-01",
     "cookie-parser": "^1.4.4",
     "countries-list": "^2.5.0",
     "csurf": "^1.11.0",
