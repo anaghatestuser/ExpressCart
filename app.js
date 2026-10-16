@@ -357,7 +357,13 @@ if(!config.secretSession || config.secretSession === ''){
     updateConfigLocal({ secretSession: randomString });
 }
 
-app.enable('trust proxy');
+// Do not trust client-supplied proxy headers (eg X-Forwarded-For) from
+// arbitrary peers: with 'trust proxy' enabled Express derives req.ip from
+// those headers, letting any client spoof their IP and defeat IP-based
+// rate limiting. When deployed behind a known reverse proxy, set this to
+// that proxy's address/subnet (eg app.set('trust proxy', '10.0.0.1'))
+// instead of enabling it for everyone.
+app.set('trust proxy', false);
 app.use(helmet());
 app.set('port', process.env.PORT || 1111);
 app.use(logger('dev'));
@@ -370,6 +376,10 @@ app.use(session({
     cookie: {
         path: '/',
         httpOnly: true,
+        // Only send the session cookie over a secure (TLS) connection so the
+        // session identifier is never transmitted in cleartext. The test
+        // harness runs over plain HTTP without TLS, so it is exempted.
+        secure: process.env.NODE_ENV !== 'test',
         maxAge: 900000
     },
     store: store
@@ -426,27 +436,7 @@ app.use((req, res, next) => {
     next(err);
 });
 
-// error handlers
-
-// development error handler
-// will print stacktrace
-if(app.get('env') === 'development'){
-    app.use((err, req, res, next) => {
-        console.error(colors.red(err.stack));
-        if(err && err.code === 'EACCES'){
-            res.status(400).json({ message: 'File upload error. Please try again.' });
-            return;
-        }
-        res.status(err.status || 500);
-        res.render('error', {
-            message: err.message,
-            error: err,
-            helpers: handlebars.helpers
-        });
-    });
-}
-
-// production error handler
+// error handler
 // no stacktraces leaked to user
 app.use((err, req, res, next) => {
     console.error(colors.red(err.stack));
