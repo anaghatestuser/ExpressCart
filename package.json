@@ -40,7 +40,7 @@
     "csurf": "^1.11.0",
     "dotenv": "^8.2.0",
     "express": "4.22.3",
-    "express-handlebars": "^3.1.0",
+    "express-handlebars": "3.1.0-lineaje-01",
     "express-rate-limit": "^5.0.0",
     "express-session": "^1.17.0",
     "feather-icons": "^4.25.0",
