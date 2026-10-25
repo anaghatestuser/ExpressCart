@@ -357,7 +357,9 @@ if(!config.secretSession || config.secretSession === ''){
     updateConfigLocal({ secretSession: randomString });
 }
 
-app.enable('trust proxy');
+// Do not enable 'trust proxy' here: the app is directly exposed and
+// trusting all proxy hops lets clients spoof req.ip (and protocol/hostname)
+// via X-Forwarded-For, defeating the IP-keyed rate limiter.
 app.use(helmet());
 app.set('port', process.env.PORT || 1111);
 app.use(logger('dev'));
@@ -370,7 +372,8 @@ app.use(session({
     cookie: {
         path: '/',
         httpOnly: true,
-        maxAge: 900000
+        maxAge: 900000,
+        secure: true
     },
     store: store
 }));
