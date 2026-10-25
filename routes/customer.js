@@ -13,7 +13,7 @@ const {
     sanitize
 } = require('../lib/common');
 const rateLimit = require('express-rate-limit');
-const { indexCustomers } = require('../lib/indexing');
+const { indexCustomers, requestCustomersReindex } = require('../lib/indexing');
 const { validateJson } = require('../lib/schema');
 const { restrict } = require('../lib/auth');
 
@@ -58,7 +58,7 @@ router.post('/customer/create', async (req, res) => {
     // email is ok to be used.
     try{
         const newCustomer = await db.customers.insertOne(customerObj);
-        indexCustomers(req.app)
+        requestCustomersReindex(req.app)
         .then(() => {
             // Return the new customer
             const customerReturn = newCustomer.ops[0];
@@ -199,7 +199,7 @@ router.post('/customer/update', async (req, res) => {
                 $set: customerObj
             }, { multi: false, returnOriginal: false }
         );
-        indexCustomers(req.app)
+        requestCustomersReindex(req.app)
         .then(() => {
             // Set the customer into the session
             req.session.customerEmail = customerObj.email;

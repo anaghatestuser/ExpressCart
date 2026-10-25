@@ -686,7 +686,7 @@ router.post('/admin/file/url', restrict, checkAccess, async (req, res) => {
 });
 
 // upload the file
-const upload = multer({ dest: 'public/uploads/' });
+const upload = multer({ dest: 'public/uploads/', limits: { fileSize: fileSizeLimit } });
 router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFile'), async (req, res) => {
     const db = req.app.db;
 
@@ -727,10 +727,10 @@ router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFi
         const imagePath = path.join('/uploads', productPath, file.originalname.replace(/ /g, '_'));
 
         // save the new file
-        const dest = fs.createWriteStream(path.join(uploadDir, file.originalname.replace(/ /g, '_')));
         const pipeline = util.promisify(stream.pipeline);
 
         try{
+            const dest = fs.createWriteStream(path.join(uploadDir, file.originalname.replace(/ /g, '_')));
             await pipeline(
                 fs.createReadStream(file.path),
                 dest
@@ -745,6 +745,16 @@ router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFi
             }
             res.status(200).json({ message: 'File uploaded successfully' });
         }catch(ex){
+            // Remove the temp file on failure
+            if(fs.existsSync(file.path)){
+                fs.unlinkSync(file.path);
+            }
+
+            // Remove any partially written destination file
+            const destPath = path.join(uploadDir, file.originalname.replace(/ /g, '_'));
+            if(fs.existsSync(destPath)){
+                fs.unlinkSync(destPath);
+            }
             console.log('Failed to upload the file', ex);
             res.status(400).json({ message: 'File upload error. Please try again.' });
         }
