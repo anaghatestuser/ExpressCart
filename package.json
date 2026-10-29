@@ -39,7 +39,7 @@
     "countries-list": "^2.5.0",
     "csurf": "^1.11.0",
     "dotenv": "^8.2.0",
-    "express": "^4.17.1",
+    "express": "4.22.2",
     "express-handlebars": "^3.1.0",
     "express-rate-limit": "^5.0.0",
     "express-session": "^1.17.0",
