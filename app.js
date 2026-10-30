@@ -16,7 +16,7 @@ const helmet = require('helmet');
 const colors = require('colors');
 const cron = require('node-cron');
 const crypto = require('crypto');
-const { getConfig, getPaymentConfig, updateConfigLocal } = require('./lib/config');
+const { getConfig, getPaymentConfig, updateConfigLocal, isValidPathName } = require('./lib/config');
 const { runIndexing } = require('./lib/indexing');
 const { addSchemas } = require('./lib/schema');
 const { initDb, getDbUri } = require('./lib/db');
@@ -39,6 +39,10 @@ if(baseConfig === false){
 
 // Validate the payment gateway config
 _.forEach(config.paymentGateway, (gateway) => {
+    if(!isValidPathName(gateway)){
+        console.log(colors.red(`Skipping invalid payment gateway name: ${gateway}`));
+        return;
+    }
     if(ajv.validate(
             require(`./config/payment/schema/${gateway}`),
             require(`./config/payment/config/${gateway}`)) === false
@@ -357,7 +361,11 @@ if(!config.secretSession || config.secretSession === ''){
     updateConfigLocal({ secretSession: randomString });
 }
 
-app.enable('trust proxy');
+// Do not enable 'trust proxy' here. Trusting X-Forwarded-* headers from
+// arbitrary clients lets them spoof req.ip/req.protocol and defeat
+// IP-keyed controls such as rate limiting. If the app is deployed
+// behind a known reverse proxy, set an explicit allowlist instead,
+// e.g. app.set('trust proxy', '<proxy IP/subnet>').
 app.use(helmet());
 app.set('port', process.env.PORT || 1111);
 app.use(logger('dev'));
@@ -370,6 +378,8 @@ app.use(session({
     cookie: {
         path: '/',
         httpOnly: true,
+        secure: 'auto',
+        sameSite: 'lax',
         maxAge: 900000
     },
     store: store
@@ -416,6 +426,9 @@ app.use('/', reviews);
 
 // Payment route(s)
 _.forEach(config.paymentGateway, (gateway) => {
+    if(!isValidPathName(gateway)){
+        return;
+    }
     app.use(`/${gateway}`, require(`./lib/payments/${gateway}`));
 });
 
