@@ -349,8 +349,10 @@ router.post('/checkout/adddiscountcode', async (req, res) => {
         return;
     }
 
-    // Check defined or null
-    if(!req.body.discountCode || req.body.discountCode === ''){
+    // Check defined, a string and not empty. A discount code is stored as a
+    // string, so reject any non-string value (eg: a JSON object such as
+    // {"$ne": ""}) to prevent it being interpreted as a MongoDB query operator.
+    if(!req.body.discountCode || typeof req.body.discountCode !== 'string' || req.body.discountCode === ''){
         res.status(400).json({
             message: 'Discount code is invalid or expired'
         });
@@ -862,12 +864,12 @@ router.post('/product/addreview', async (req, res, next) => {
         }
 
         // Validate inputs
-        if(!req.body.title){
+        if(!req.body.title || typeof req.body.title !== 'string'){
             return res.status(400).json({
                 message: 'Please supply a review title'
             });
         }
-        if(!req.body.description){
+        if(!req.body.description || typeof req.body.description !== 'string'){
             return res.status(400).json({
                 message: 'Please supply a review description'
             });
@@ -875,6 +877,11 @@ router.post('/product/addreview', async (req, res, next) => {
         if(!req.body.rating){
             return res.status(400).json({
                 message: 'Please supply a review rating'
+            });
+        }
+        if(!req.body.product || !ObjectId.isValid(req.body.product)){
+            return res.status(400).json({
+                message: 'Please supply a valid product'
             });
         }
 
