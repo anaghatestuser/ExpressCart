@@ -19,7 +19,14 @@ const { restrict } = require('../lib/auth');
 
 const apiLimiter = rateLimit({
     windowMs: 300000, // 5 minutes
-    max: 5
+    max: 5,
+    // Key the limiter on the transport-level peer address. The default
+    // keyGenerator uses req.ip, which Express derives from the
+    // client-supplied X-Forwarded-For header when 'trust proxy' is enabled,
+    // letting a client mint a fresh limiter key per request and bypass the
+    // limit. req.socket.remoteAddress comes from the TCP connection and
+    // cannot be influenced by request headers.
+    keyGenerator: (req) => req.socket.remoteAddress
 });
 
 // insert a customer
