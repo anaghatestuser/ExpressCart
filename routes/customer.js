@@ -507,8 +507,20 @@ router.post('/customer/forgotten_action', apiLimiter, async (req, res) => {
     const config = req.app.config;
     const passwordToken = randtoken.generate(30);
 
+    // The email must be a plain string. A JSON object/array here would be
+    // interpreted by MongoDB as query operators (eg: {"$gt": ""}) allowing
+    // the reset token to be written to an arbitrary account.
+    const email = mongoSanitize(req.body.email);
+    if(typeof email !== 'string'){
+        // silently fail, the same as an email with no account on file
+        res.status(200).json({
+            message: 'If your account exists, a password reset has been sent to your email'
+        });
+        return;
+    }
+
     // find the user
-    const customer = await db.customers.findOne({ email: req.body.email });
+    const customer = await db.customers.findOne({ email: email });
     try{
         if(!customer){
             // if don't have an email on file, silently fail
@@ -518,10 +530,10 @@ router.post('/customer/forgotten_action', apiLimiter, async (req, res) => {
             return;
         }
         const tokenExpiry = Date.now() + 3600000;
-        await db.customers.updateOne({ email: req.body.email }, { $set: { resetToken: passwordToken, resetTokenExpiry: tokenExpiry } }, { multi: false });
+        await db.customers.updateOne({ email: email }, { $set: { resetToken: passwordToken, resetTokenExpiry: tokenExpiry } }, { multi: false });
         // send forgotten password email
         const mailOpts = {
-            to: req.body.email,
+            to: email,
             subject: 'Forgotten password request',
             body: `You are receiving this because you (or someone else) have requested the reset of the password for your user account.\n\n
                 Please click on the following link, or paste this into your browser to complete the process:\n\n

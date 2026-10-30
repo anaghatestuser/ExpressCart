@@ -549,7 +549,18 @@ router.post('/product/updatecart', async (req, res, next) => {
         return;
     }
 
-    const product = await db.products.findOne({ _id: getId(cartItem.productId) });
+    // Check the cart item being updated exists
+    if(!req.session.cart[cartItem.cartId]){
+        res.status(400).json({ message: 'There was an error updating the cart', totalCartItems: Object.keys(req.session.cart).length });
+        return;
+    }
+
+    const cartProduct = req.session.cart[cartItem.cartId];
+
+    // The product (and its price) must be looked up from the server-side
+    // cart entry, never from a productId supplied in the request body,
+    // otherwise the price of one product can be applied to another.
+    const product = await db.products.findOne({ _id: getId(cartProduct.productId) });
     if(!product){
         res.status(400).json({ message: 'There was an error updating the cart', totalCartItems: Object.keys(req.session.cart).length });
         return;
@@ -573,14 +584,6 @@ router.post('/product/updatecart', async (req, res, next) => {
         res.status(400).json({ message: 'There was an error updating the cart. Cannot update a negative quantity.', totalCartItems: Object.keys(req.session.cart).length });
         return;
     }
-
-    // Check for a cart
-    if(!req.session.cart[cartItem.cartId]){
-        res.status(400).json({ message: 'There was an error updating the cart', totalCartItems: Object.keys(req.session.cart).length });
-        return;
-    }
-
-    const cartProduct = req.session.cart[cartItem.cartId];
 
     // Set default stock
     let productStock = product.productStock;

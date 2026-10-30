@@ -94,15 +94,17 @@ router.post('/admin/login_action', async (req, res) => {
     const db = req.app.db;
 
     const user = await db.users.findOne({ userEmail: mongoSanitize(req.body.email) });
-    if(!user || user === null){
-        res.status(400).json({ message: 'A user with that email does not exist.' });
-        return;
-    }
 
-    // we have a user under that email so we compare the password
-    bcrypt.compare(req.body.password, user.userPassword)
+    // Compare against the users password hash, falling back to a dummy bcrypt
+    // hash when no user exists. Failed logins therefore return an identical
+    // response (and perform equivalent bcrypt work) whether or not the email
+    // is registered, so the endpoint cannot be used to enumerate accounts.
+    const passwordHash = user ? user.userPassword : '$2a$10$P/o32x8s7vWUo0uGQafvC.yAs9DpuiaMomUmJbpqkX41RKAj9OJui';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    bcrypt.compare(password, passwordHash)
         .then((result) => {
-            if(result){
+            if(user && result){
                 req.session.user = req.body.email;
                 req.session.usersName = user.usersName;
                 req.session.userId = user._id.toString();
@@ -110,7 +112,10 @@ router.post('/admin/login_action', async (req, res) => {
                 res.status(200).json({ message: 'Login successful' });
                 return;
             }
-            // password is not correct
+            // password is not correct or no user exists under that email
+            res.status(400).json({ message: 'Access denied. Check password and try again.' });
+        })
+        .catch(() => {
             res.status(400).json({ message: 'Access denied. Check password and try again.' });
         });
 });
@@ -138,9 +143,22 @@ router.get('/admin/setup', async (req, res) => {
     res.redirect('/admin/login');
 });
 
+// Serializes the setup check-then-act below. Chaining the user lookup and
+// owner insert through this promise makes them atomic per process, so
+// concurrent setup requests cannot all observe an empty users collection.
+let setupLock = Promise.resolve();
+
 // insert a user
 router.post('/admin/setup_action', async (req, res) => {
     const db = req.app.db;
+
+    // Only allow setup from a session flagged as needing setup. The flag is
+    // exclusively set by the login/setup routes after confirming no user
+    // accounts exist, which blocks direct unauthenticated account creation.
+    if(req.session.needsSetup !== true){
+        res.status(400).json({ message: 'Setup not permitted' });
+        return;
+    }
 
     const doc = {
         usersName: req.body.usersName,
@@ -150,21 +168,29 @@ router.post('/admin/setup_action', async (req, res) => {
         isOwner: true
     };
 
-    // check for users
-    const userCount = await db.users.countDocuments({});
-    if(userCount === 0){
-        // email is ok to be used.
-        try{
-            await db.users.insertOne(doc);
-            res.status(200).json({ message: 'User account inserted' });
-            return;
-        }catch(ex){
-            console.error(colors.red(`Failed to insert user: ${ex}`));
-            res.status(200).json({ message: 'Setup failed' });
-            return;
+    // Run the check for existing users and the insert of the owner account
+    // as a serialized critical section so concurrent requests cannot race
+    // past the userCount === 0 check and each create an owner account.
+    const request = setupLock.then(async () => {
+        // check for users
+        const userCount = await db.users.countDocuments({});
+        if(userCount === 0){
+            // email is ok to be used.
+            try{
+                await db.users.insertOne(doc);
+                res.status(200).json({ message: 'User account inserted' });
+                return;
+            }catch(ex){
+                console.error(colors.red(`Failed to insert user: ${ex}`));
+                res.status(200).json({ message: 'Setup failed' });
+                return;
+            }
         }
-    }
-    res.status(200).json({ message: 'Already setup.' });
+        res.status(200).json({ message: 'Already setup.' });
+    });
+    // Keep the lock chain alive even when a request fails
+    setupLock = request.catch(() => {});
+    await request;
 });
 
 // dashboard
@@ -452,24 +478,35 @@ router.post('/admin/settings/menu/saveOrder', restrict, checkAccess, (req, res) 
 });
 
 // validate the permalink
-router.post('/admin/validatePermalink', async (req, res) => {
+router.post('/admin/validatePermalink', restrict, checkAccess, async (req, res) => {
     // if doc id is provided it checks for permalink in any products other that one provided,
     // else it just checks for any products with that permalink
     const db = req.app.db;
 
-    let query = {};
-    if(typeof req.body.docId === 'undefined' || req.body.docId === ''){
-        query = { productPermalink: req.body.permalink };
-    }else{
-        query = { productPermalink: req.body.permalink, _id: { $ne: getId(req.body.docId) } };
-    }
-
-    const products = await db.products.countDocuments(query);
-    if(products && products > 0){
-        res.status(400).json({ message: 'Permalink already exists' });
+    // The permalink must be a plain string. Reject objects/arrays so MongoDB
+    // query operators (eg. $ne, $regex) cannot be injected into the query.
+    if(typeof req.body.permalink !== 'string'){
+        res.status(400).json({ message: 'Invalid permalink supplied' });
         return;
     }
-    res.status(200).json({ message: 'Permalink validated successfully' });
+
+    try{
+        let query = {};
+        if(typeof req.body.docId !== 'string' || req.body.docId === ''){
+            query = { productPermalink: req.body.permalink };
+        }else{
+            query = { productPermalink: req.body.permalink, _id: { $ne: getId(req.body.docId) } };
+        }
+
+        const products = await db.products.countDocuments(query);
+        if(products && products > 0){
+            res.status(400).json({ message: 'Permalink already exists' });
+            return;
+        }
+        res.status(200).json({ message: 'Permalink validated successfully' });
+    }catch(ex){
+        res.status(400).json({ message: 'Error validating permalink. Please try again.' });
+    }
 });
 
 // Discount codes
