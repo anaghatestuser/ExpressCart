@@ -100,6 +100,12 @@ router.post('/admin/login_action', async (req, res) => {
     }
 
     // we have a user under that email so we compare the password
+    // the password must be a string. bcrypt.compare() rejects on any
+    // other type and an unhandled rejection would kill the process.
+    if(typeof req.body.password !== 'string'){
+        res.status(400).json({ message: 'Access denied. Check password and try again.' });
+        return;
+    }
     bcrypt.compare(req.body.password, user.userPassword)
         .then((result) => {
             if(result){
@@ -111,6 +117,9 @@ router.post('/admin/login_action', async (req, res) => {
                 return;
             }
             // password is not correct
+            res.status(400).json({ message: 'Access denied. Check password and try again.' });
+        })
+        .catch((err) => {
             res.status(400).json({ message: 'Access denied. Check password and try again.' });
         });
 });
@@ -141,6 +150,13 @@ router.get('/admin/setup', async (req, res) => {
 // insert a user
 router.post('/admin/setup_action', async (req, res) => {
     const db = req.app.db;
+
+    // the password must be a string. bcrypt.hashSync() throws on any
+    // other type and an unhandled rejection would kill the process.
+    if(typeof req.body.userPassword !== 'string'){
+        res.status(400).json({ message: 'Setup failed' });
+        return;
+    }
 
     const doc = {
         usersName: req.body.usersName,
@@ -686,7 +702,10 @@ router.post('/admin/file/url', restrict, checkAccess, async (req, res) => {
 });
 
 // upload the file
-const upload = multer({ dest: 'public/uploads/' });
+const upload = multer({
+    dest: 'public/uploads/',
+    limits: { fileSize: fileSizeLimit }
+});
 router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFile'), async (req, res) => {
     const db = req.app.db;
 
@@ -707,7 +726,12 @@ router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFi
         }
 
         // get the product form the DB
-        const product = await db.products.findOne({ _id: getId(req.body.productId) });
+        let product;
+        try{
+            product = await db.products.findOne({ _id: getId(req.body.productId) });
+        }catch(ex){
+            product = null;
+        }
         if(!product){
             // delete the temp file.
             fs.unlinkSync(file.path);
@@ -723,14 +747,18 @@ router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFi
         // Check directory and create (if needed)
         checkDirectorySync(uploadDir);
 
-        // Setup the new path
-        const imagePath = path.join('/uploads', productPath, file.originalname.replace(/ /g, '_'));
+        // Reduce the user supplied file name to a base name so it cannot
+        // reference a sub directory or escape the product upload directory
+        const fileName = path.basename(file.originalname.replace(/ /g, '_'));
 
-        // save the new file
-        const dest = fs.createWriteStream(path.join(uploadDir, file.originalname.replace(/ /g, '_')));
+        // Setup the new path
+        const imagePath = path.join('/uploads', productPath, fileName);
+
         const pipeline = util.promisify(stream.pipeline);
 
         try{
+            // save the new file
+            const dest = fs.createWriteStream(path.join(uploadDir, fileName));
             await pipeline(
                 fs.createReadStream(file.path),
                 dest
@@ -745,6 +773,10 @@ router.post('/admin/file/upload', restrict, checkAccess, upload.single('uploadFi
             }
             res.status(200).json({ message: 'File uploaded successfully' });
         }catch(ex){
+            // delete the temp file (if it exists) so failed uploads don't accumulate
+            if(fs.existsSync(file.path)){
+                fs.unlinkSync(file.path);
+            }
             console.log('Failed to upload the file', ex);
             res.status(400).json({ message: 'File upload error. Please try again.' });
         }
