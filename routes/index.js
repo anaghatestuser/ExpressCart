@@ -13,7 +13,8 @@ const {
     clearSessionValue,
     getImages,
     addSitemapProducts,
-    getCountryList
+    getCountryList,
+    mongoSanitize
 } = require('../lib/common');
 const {
     getSort,
@@ -349,8 +350,8 @@ router.post('/checkout/adddiscountcode', async (req, res) => {
         return;
     }
 
-    // Check defined or null
-    if(!req.body.discountCode || req.body.discountCode === ''){
+    // Check defined, a string and not empty
+    if(!req.body.discountCode || typeof req.body.discountCode !== 'string' || req.body.discountCode === ''){
         res.status(400).json({
             message: 'Discount code is invalid or expired'
         });
@@ -358,7 +359,7 @@ router.post('/checkout/adddiscountcode', async (req, res) => {
     }
 
     // Validate discount code
-    const discount = await db.discounts.findOne({ code: req.body.discountCode });
+    const discount = await db.discounts.findOne({ code: mongoSanitize(req.body.discountCode) });
     if(!discount){
         res.status(400).json({
             message: 'Discount code is invalid or expired'
@@ -862,12 +863,12 @@ router.post('/product/addreview', async (req, res, next) => {
         }
 
         // Validate inputs
-        if(!req.body.title){
+        if(!req.body.title || typeof req.body.title !== 'string'){
             return res.status(400).json({
                 message: 'Please supply a review title'
             });
         }
-        if(!req.body.description){
+        if(!req.body.description || typeof req.body.description !== 'string'){
             return res.status(400).json({
                 message: 'Please supply a review description'
             });
@@ -875,6 +876,18 @@ router.post('/product/addreview', async (req, res, next) => {
         if(!req.body.rating){
             return res.status(400).json({
                 message: 'Please supply a review rating'
+            });
+        }
+        if(!req.body.product || !ObjectId.isValid(req.body.product)){
+            return res.status(400).json({
+                message: 'Please supply a valid product'
+            });
+        }
+
+        // Validate input types (stripHtml throws on non-string input)
+        if(typeof req.body.title !== 'string' || typeof req.body.description !== 'string'){
+            return res.status(400).json({
+                message: 'Please supply valid review inputs'
             });
         }
 
