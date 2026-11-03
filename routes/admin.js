@@ -36,7 +36,15 @@ const {
 } = require('../lib/menu');
 const ObjectId = require('mongodb').ObjectID;
 const router = express.Router();
-const csrfProtection = csrf({ cookie: true });
+const csrfProtection = csrf({
+    cookie: {
+        key: '_csrf',
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV !== 'test',
+        sameSite: 'lax'
+    }
+});
 
 // Regex
 const emailRegex = /\S+@\S+\.\S+/;
@@ -103,11 +111,18 @@ router.post('/admin/login_action', async (req, res) => {
     bcrypt.compare(req.body.password, user.userPassword)
         .then((result) => {
             if(result){
-                req.session.user = req.body.email;
-                req.session.usersName = user.usersName;
-                req.session.userId = user._id.toString();
-                req.session.isAdmin = user.isAdmin;
-                res.status(200).json({ message: 'Login successful' });
+                // Rotate the session ID on authentication to prevent session fixation
+                req.session.regenerate((err) => {
+                    if(err){
+                        res.status(400).json({ message: 'Login failed. Please try again.' });
+                        return;
+                    }
+                    req.session.user = req.body.email;
+                    req.session.usersName = user.usersName;
+                    req.session.userId = user._id.toString();
+                    req.session.isAdmin = user.isAdmin;
+                    res.status(200).json({ message: 'Login successful' });
+                });
                 return;
             }
             // password is not correct
@@ -763,7 +778,7 @@ router.post('/admin/testEmail', restrict, (req, res) => {
     res.status(200).json({ message: 'Test email sent' });
 });
 
-router.post('/admin/searchall', restrict, async (req, res, next) => {
+router.post('/admin/searchall', restrict, checkAccess, async (req, res, next) => {
     const db = req.app.db;
     const searchValue = req.body.searchValue;
     const limitReturned = 5;

@@ -364,13 +364,14 @@ app.use(logger('dev'));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser(config.secretCookie));
 app.use(session({
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
     secret: config.secretSession,
     cookie: {
         path: '/',
         httpOnly: true,
-        maxAge: 900000
+        maxAge: 900000,
+        sameSite: 'lax'
     },
     store: store
 }));
@@ -488,7 +489,7 @@ initDb(config.databaseConnectionString, async (err, db) => {
 
     // Fire up the cron job to clear temp held stock
     cron.schedule('*/1 * * * *', async () => {
-        const validSessions = await db.sessions.find({}).toArray();
+        const validSessions = await db.sessions.find({}, { projection: { _id: 1 } }).toArray();
         const validSessionIds = [];
         _.forEach(validSessions, (value) => {
             validSessionIds.push(value._id);
