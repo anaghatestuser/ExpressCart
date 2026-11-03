@@ -370,7 +370,13 @@ app.use(session({
     cookie: {
         path: '/',
         httpOnly: true,
-        maxAge: 900000
+        maxAge: 900000,
+        // Never issue the session cookie over an insecure (cleartext HTTP)
+        // connection. Behind a TLS-terminating proxy ('trust proxy' above)
+        // it is issued with the Secure attribute so browsers only ever
+        // transmit it over HTTPS. Disabled only for the HTTP loopback
+        // test harness (NODE_ENV=test).
+        secure: process.env.NODE_ENV !== 'test'
     },
     store: store
 }));
