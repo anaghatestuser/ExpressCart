@@ -1,12 +1,12 @@
 const express = require('express');
-const { restrict } = require('../lib/auth');
+const { restrict, checkAccess } = require('../lib/auth');
 const { getId, clearSessionValue } = require('../lib/common');
 const colors = require('colors');
 const bcrypt = require('bcryptjs');
 const { validateJson } = require('../lib/schema');
 const router = express.Router();
 
-router.get('/admin/users', restrict, async (req, res) => {
+router.get('/admin/users', restrict, checkAccess, async (req, res) => {
     const db = req.app.db;
     const users = await db.users.find({}, { projection: { userPassword: 0 } }).toArray();
 
@@ -73,7 +73,7 @@ router.get('/admin/user/edit/:id', restrict, async (req, res) => {
 });
 
 // users new
-router.get('/admin/user/new', restrict, (req, res) => {
+router.get('/admin/user/new', restrict, checkAccess, (req, res) => {
     res.render('user-new', {
         title: 'User - New',
         admin: true,
@@ -196,7 +196,7 @@ router.post('/admin/user/update', restrict, async (req, res) => {
 });
 
 // insert a user
-router.post('/admin/user/insert', restrict, async (req, res) => {
+router.post('/admin/user/insert', restrict, checkAccess, async (req, res) => {
     const db = req.app.db;
 
     // Check number of users
