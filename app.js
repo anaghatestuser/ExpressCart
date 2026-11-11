@@ -4,6 +4,7 @@ if(fs.existsSync('./env.yaml')){
     process.env = yenv('env.yaml', { strict: false });
 }
 const path = require('path');
+const http = require('http');
 const express = require('express');
 const logger = require('morgan');
 const cookieParser = require('cookie-parser');
@@ -360,17 +361,25 @@ if(!config.secretSession || config.secretSession === ''){
 app.enable('trust proxy');
 app.use(helmet());
 app.set('port', process.env.PORT || 1111);
+// Redact credential-bearing tokens (eg: password reset tokens) from
+// URL's written to the request log
+logger.token('url', (req) => {
+    const url = req.originalUrl || req.url || '';
+    return url.replace(/^(\/customer\/reset\/)[^/?&#]+/i, '$1<redacted>');
+});
 app.use(logger('dev'));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser(config.secretCookie));
 app.use(session({
     resave: true,
-    saveUninitialized: true,
+    saveUninitialized: false,
     secret: config.secretSession,
     cookie: {
         path: '/',
         httpOnly: true,
-        maxAge: 900000
+        maxAge: 900000,
+        secure: process.env.NODE_ENV !== 'test',
+        sameSite: 'lax'
     },
     store: store
 }));
@@ -437,10 +446,11 @@ if(app.get('env') === 'development'){
             res.status(400).json({ message: 'File upload error. Please try again.' });
             return;
         }
-        res.status(err.status || 500);
+        const statusCode = err.status || 500;
+        res.status(statusCode);
         res.render('error', {
-            message: err.message,
-            error: err,
+            message: http.STATUS_CODES[statusCode] || 'Internal Server Error',
+            error: {},
             helpers: handlebars.helpers
         });
     });
@@ -454,9 +464,10 @@ app.use((err, req, res, next) => {
         res.status(400).json({ message: 'File upload error. Please try again.' });
         return;
     }
-    res.status(err.status || 500);
+    const statusCode = err.status || 500;
+    res.status(statusCode);
     res.render('error', {
-        message: err.message,
+        message: http.STATUS_CODES[statusCode] || 'Internal Server Error',
         error: {},
         helpers: handlebars.helpers
     });
