@@ -163,6 +163,13 @@ router.post('/admin/user/update', restrict, async (req, res) => {
         updateDoc.userEmail = req.body.userEmail;
     }
     if(req.body.userPassword){
+        // Only a string value can be hashed, otherwise reject the request
+        if(typeof req.body.userPassword !== 'string'){
+            res.status(400).json({
+                message: 'Failed to create user. Check inputs.'
+            });
+            return;
+        }
         updateDoc.userPassword = bcrypt.hashSync(req.body.userPassword);
     }
 
@@ -206,6 +213,12 @@ router.post('/admin/user/insert', restrict, async (req, res) => {
     // if no users, setup user as admin
     if(userCount === 0){
         isAdmin = true;
+    }
+
+    // Only a string value can be hashed, otherwise reject the request
+    if(typeof req.body.userPassword !== 'string'){
+        res.status(400).json({ message: 'Failed to create user. Check inputs.' });
+        return;
     }
 
     const userObj = {
